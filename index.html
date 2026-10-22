@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Міні Tower Defense</title>
+<style>
+:root{color-scheme:dark;--bg:#10251f;--panel:#132b35;--gold:#ffd34d;--text:#f5f7ef}
+*{box-sizing:border-box}body{margin:0;background:linear-gradient(#10271f,#08151c);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,sans-serif;touch-action:manipulation}
+.app{max-width:1000px;margin:auto;padding:10px;display:grid;gap:10px}
+header,.panel{background:linear-gradient(145deg,#183541,#0e202a);border:1px solid #3b6470;border-radius:14px;padding:10px;box-shadow:0 7px 22px #0006,inset 0 1px #ffffff0b}
+header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.top-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap;margin-left:auto}
+#startWave{min-width:145px;padding:8px 12px;background:linear-gradient(160deg,#416a42,#25442d);border-color:#86b86e}
+h1{font-size:clamp(18px,4vw,27px);margin:0}.stats{display:flex;gap:12px;font-weight:800}.stat{white-space:nowrap}
+#game{width:100%;display:block;border-radius:12px;border:2px solid #4b8060;background:#69a84c;aspect-ratio:16/9;touch-action:manipulation;box-shadow:0 8px 24px #0005}
+.controls{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+button{border:1px solid #52717b;border-radius:11px;background:linear-gradient(160deg,#254b59,#162e39);color:white;font:inherit;font-weight:750;padding:10px 5px;cursor:pointer;min-height:48px}
+button:active{transform:scale(.98)}button.selected{border:2px solid var(--gold);background:#34533e}button:disabled{opacity:.45;cursor:not-allowed}
+.tower-name{font-size:clamp(12px,2.6vw,15px)}.price{color:var(--gold);font-size:13px}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.row button{flex:1}
+#message{min-height:1.4em;color:#cfe6d0;font-size:14px}.hint{font-size:13px;color:#bdd0d0;line-height:1.45}
+.boss-hud{display:none;background:linear-gradient(135deg,#391f2a,#1a202d);border:1px solid #a74b54;border-radius:12px;padding:9px 12px;box-shadow:0 0 20px #ff3b4b22}
+.boss-hud.visible{display:block;animation:bossIn .35s ease-out}
+.boss-label{display:flex;justify-content:space-between;gap:8px;font-size:13px;font-weight:850;color:#ffd5d5;margin-bottom:6px}
+.boss-track{height:15px;background:#351a20;border:1px solid #a04c56;border-radius:99px;overflow:hidden}
+#bossHpFill{height:100%;width:100%;background:linear-gradient(90deg,#e83246,#ff6a43,#ffd15b);border-radius:99px;transition:width .18s;box-shadow:0 0 12px #ff4059}
+@keyframes bossIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.stats-card{margin-top:8px;padding:11px;border:1px solid #41616b;border-radius:12px;background:linear-gradient(135deg,#173641,#10242d);display:grid;gap:7px}
+.stats-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;font-size:14px}
+.stats-grid span{padding:7px;border-radius:8px;background:#ffffff0b}
+.stats-card small{color:#b8d0d0;line-height:1.4}
+@media(max-width:600px){header{align-items:flex-start}.top-actions{width:100%;justify-content:space-between}.stats{gap:7px;font-size:14px}#startWave{min-width:130px;flex:0 0 auto}}
+@media(max-width:480px){.app{padding:6px;gap:7px}.controls{gap:5px}button{padding:8px 3px;min-height:44px}.panel{padding:8px}.top-actions{gap:6px}#startWave{padding:7px 8px;font-size:13px}}
+</style>
+</head>
+<body>
+<div class="app">
+<header><h1>🏰 Міні Tower Defense</h1><div class="top-actions"><div class="stats"><span class="stat">❤️ <b id="lives">20</b></span><span class="stat">🪙 <b id="coins">180</b></span><span class="stat">🌊 <b id="wave">0/10</b></span></div><button id="startWave"><div>⚔️ Почати хвилю</div><div class="price">▶</div></button></div></header>
+<div id="bossHud" class="boss-hud"><div class="boss-label">👹 БОС — ЗАЛИШОК ЗДОРОВ’Я <b id="bossHpText">—</b></div><div class="boss-track"><div id="bossHpFill"></div></div></div>
+<canvas id="game" width="960" height="540" aria-label="Ігрове поле"></canvas>
+<section class="panel">
+  <div class="controls">
+    <button data-tower="archer"><div>🏹</div><div class="tower-name">Лучник</div><div class="price">🪙 60</div></button>
+    <button data-tower="cannon"><div>💣</div><div class="tower-name">Гармата</div><div class="price">🪙 95</div></button>
+    <button data-tower="mage"><div>🔮</div><div class="tower-name">Маг</div><div class="price">🪙 110</div></button>
+    <button data-tower="barracks" id="barracksBtn" disabled><div>🏰</div><div class="tower-name">Казарма</div><div class="price">🔒 Після боса</div></button>
+  </div>
+  <div class="row" style="margin-top:8px"><button id="upgrade" disabled>⬆️ Покращити</button><button id="sell" disabled>♻️ Продати</button><button id="pause">⏸ Пауза</button></div>
+  <div id="towerStats" class="stats-card"><b>📊 Характеристики башти</b><div class="stats-grid"><span>💥 Шкода: —</span><span>🎯 Дальність: —</span><span>⚡ Перезарядка: —</span><span>⭐ Рівень: —</span></div><small>Обери встановлену башту на полі, щоб побачити її параметри.</small></div>
+  <div id="message" role="status">Обери башту, потім торкнися вільного місця біля дороги.</div>
+  <div class="hint">Як грати: вибери башту → постав її на траву біля дороги → натисни «Почати хвилю». Торкнися вже поставленої башти, щоб покращити або продати її. Не пропускай ворогів до правого виходу!</div>
+</section>
+</div>
+<script>
+(()=>{
+const canvas=document.getElementById('game'),ctx=canvas.getContext('2d');
+const W=960,H=540;
+const path=[[-20,185],[285,185],[330,220],[330,390],[510,390],[545,350],[545,225],[710,225],[750,260],[750,350],[980,350]];
+const defs={
+ archer:{name:'Лучник',cost:60,range:128,damage:15,rate:.72,color:'#f3b15e',emoji:'🏹'},
+ cannon:{name:'Гармата',cost:95,range:150,damage:34,rate:1.25,color:'#aab6c3',emoji:'💣'},
+ mage:{name:'Маг',cost:110,range:140,damage:22,rate:.85,color:'#8d9cff',emoji:'🔮'},
+ barracks:{name:'Казарма',cost:130,range:0,damage:28,rate:2.2,color:'#d6c18b',emoji:'🏰',isBarracks:true}
+};
+let coins=180,lives=20,wave=0,selectedType=null,selectedTower=null,enemies=[],towers=[],shots=[],particles=[],knights=[],spawnLeft=0,spawnTimer=0,active=false,paused=false,last=0,gameOver=false,clock=0,bossUnlocked=false,bossRewardClaimed=false,barracksUnlocked=false,knightSpawnTimer=0;
+const buttons=[...document.querySelectorAll('[data-tower]')];
+function upgradeCost(t){return 50+25*Math.max(0,t.level-1);}
+function ui(msg){
+ document.getElementById('lives').textContent=lives;document.getElementById('coins').textContent=coins;document.getElementById('wave').textContent=wave+'/10';
+ if(msg!==undefined)document.getElementById('message').textContent=msg;
+ const up=document.getElementById('upgrade'),sellBtn=document.getElementById('sell');
+ up.textContent=selectedTower?'⬆️ Покращити (🪙 '+upgradeCost(selectedTower)+')':'⬆️ Покращити';
+ up.disabled=!selectedTower||coins<upgradeCost(selectedTower)||gameOver;
+ sellBtn.disabled=!selectedTower||gameOver;
+ buttons.forEach(b=>b.classList.toggle('selected',b.dataset.tower===selectedType));
+ const barracksBtn=document.getElementById('barracksBtn');
+ barracksBtn.disabled=!barracksUnlocked||coins<defs.barracks.cost||gameOver;
+ barracksBtn.querySelector('.price').textContent=barracksUnlocked?'🪙 130':'🔒 Після боса';
+ const boss=enemies.find(e=>e.boss);
+ const bossHud=document.getElementById('bossHud');
+ bossHud.classList.toggle('visible',!!boss);
+ if(boss){document.getElementById('bossHpText').textContent=Math.max(0,Math.ceil(boss.hp))+' / '+boss.maxHp;document.getElementById('bossHpFill').style.width=(100*Math.max(0,boss.hp)/boss.maxHp)+'%';}
+ const card=document.getElementById('towerStats');
+ if(selectedTower){
+   const t=selectedTower;
+   card.innerHTML=t.isBarracks?'<b>📊 Казарма — характеристики</b><div class="stats-grid"><span>⚔️ Шкода лицаря: <b>'+Math.round(t.damage)+'</b></span><span>❤️ Здоров’я лицаря: <b>160</b></span><span>⏱️ Новий лицар: <b>кожні 8 с</b></span><span>⭐ Рівень: <b>'+t.level+'</b></span><span>🪙 Вартість покращення: <b>'+upgradeCost(t)+'</b></span><span>♻️ Продаж: <b>'+Math.floor(t.cost*.6)+' монет</b></span></div><small>Казарма відправляє лицарів із бази на дорогу. Лицарі зупиняють ворогів і б’ють їх у ближньому бою.</small>':'<b>📊 '+t.name+' — характеристики</b><div class="stats-grid"><span>💥 Шкода: <b>'+Math.round(t.damage)+'</b></span><span>🎯 Дальність: <b>'+Math.round(t.range)+'</b></span><span>⚡ Перезарядка: <b>'+t.rate.toFixed(2)+' с</b></span><span>⭐ Рівень: <b>'+t.level+'</b></span><span>🪙 Вартість покращення: <b>'+upgradeCost(t)+'</b></span><span>♻️ Продаж: <b>'+Math.floor(t.cost*.6)+' монет</b></span></div><small>Кожне покращення збільшує шкоду, дальність і швидкість атаки. Наступне покращення коштує дорожче.</small>';
+ }else{
+   card.innerHTML='<b>📊 Характеристики башти</b><div class="stats-grid"><span>💥 Шкода: —</span><span>🎯 Дальність: —</span><span>⚡ Перезарядка: —</span><span>⭐ Рівень: —</span></div><small>Обери встановлену башту на полі, щоб побачити її параметри.</small>';
+ }
+}
+function pathPoint(t){let left=t;for(let i=1;i<path.length;i++){let [x1,y1]=path[i-1],[x2,y2]=path[i],len=Math.hypot(x2-x1,y2-y1);if(left<=len){let f=left/len;return{x:x1+(x2-x1)*f,y:y1+(y2-y1)*f};}left-=len;}return{x:980,y:350};}
+const pathLength=()=>path.slice(1).reduce((s,p,i)=>s+Math.hypot(p[0]-path[i][0],p[1]-path[i][1]),0);
+const totalPath=pathLength();
+function nearPath(x,y){for(let i=1;i<path.length;i++){let [x1,y1]=path[i-1],[x2,y2]=path[i],dx=x2-x1,dy=y2-y1,t=Math.max(0,Math.min(1,((x-x1)*dx+(y-y1)*dy)/(dx*dx+dy*dy))),px=x1+t*dx,py=y1+t*dy;if(Math.hypot(x-px,y-py)<49)return true;}return false;}
+function placeTower(x,y){if(!selectedType)return;const d=defs[selectedType];if(d.isBarracks&&!barracksUnlocked){ui('Спочатку переможи боса на 5-й хвилі, щоб відкрити казарму!');return;}if(d.isBarracks&&towers.some(t=>t.isBarracks)){selectedTower=towers.find(t=>t.isBarracks);ui('Казарма вже побудована — можна покращити її або вибрати іншу башту.');return;}if(coins<d.cost){ui('Не вистачає монет!');return;}if(nearPath(x,y)||x<25||x>935||y<25||y>515||towers.some(t=>Math.hypot(t.x-x,t.y-y)<43)){ui('Постав будівлю на вільну траву, не на дорогу.');return;}coins-=d.cost;towers.push({x,y,type:selectedType,level:1,cool:0,...d});selectedTower=towers[towers.length-1];ui(d.name+' поставлено! '+(d.isBarracks?'Лицарі виходитимуть із бази.':'Тепер починай хвилю або додай ще башт.'));}
+function drawBackground(){
+ ctx.fillStyle='#72ad4c';ctx.fillRect(0,0,W,H);
+ // grass texture
+ for(let i=0;i<140;i++){let x=(i*137+37)%W,y=(i*83+19)%H;ctx.strokeStyle=i%2?'#5d9940':'#84bc58';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+4,y-7);ctx.moveTo(x+4,y);ctx.lineTo(x+8,y-5);ctx.stroke();}
+ // pond
+ ctx.fillStyle='#247f9b';ctx.beginPath();ctx.ellipse(55,460,92,105,-.3,0,Math.PI*2);ctx.fill();ctx.strokeStyle='#80d1d5';ctx.lineWidth=5;ctx.stroke();
+ // road shadow and road
+ ctx.lineCap='round';ctx.lineJoin='round';ctx.strokeStyle='#8c653d';ctx.lineWidth=91;ctx.beginPath();path.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.stroke();
+ ctx.strokeStyle='#d8b578';ctx.lineWidth=79;ctx.beginPath();path.forEach((p,i)=>i?ctx.lineTo(...p):ctx.moveTo(...p));ctx.stroke();
+ for(let i=0;i<path.length-1;i++){let [x1,y1]=path[i],[x2,y2]=path[i+1],len=Math.hypot(x2-x1,y2-y1);for(let d=25;d<len;d+=47){let x=x1+(x2-x1)*d/len,y=y1+(y2-y1)*d/len;ctx.fillStyle='#c49c62';ctx.beginPath();ctx.ellipse(x+5,y+5,4,2,.5,0,Math.PI*2);ctx.fill();}}
+ // trees and rocks
+ for(const [x,y,r] of [[85,70,26],[155,48,30],[240,90,25],[410,45,22],[635,65,28],[860,85,32],[915,170,25],[145,470,27],[265,495,22],[870,450,30],[620,470,24],[430,475,22]]){
+ ctx.fillStyle='#4c7836';ctx.beginPath();ctx.arc(x+4,y+7,r,0,7);ctx.fill();ctx.fillStyle='#2d713e';ctx.beginPath();ctx.arc(x,y,r,0,7);ctx.fill();ctx.fillStyle='#438b48';ctx.beginPath();ctx.arc(x-7,y-6,r*.7,0,7);ctx.fill();
+ }
+ // exit gate
+ ctx.fillStyle='#64472c';ctx.fillRect(908,304,18,95);ctx.fillStyle='#b58a4b';ctx.fillRect(913,310,8,82);ctx.fillStyle='#26343b';ctx.fillRect(925,310,21,82);ctx.fillStyle='#f0e9d7';ctx.font='bold 21px system-ui';ctx.fillText('✦',927,355);
+}
+function drawTower(t){ctx.save();ctx.translate(t.x,t.y);if(t.isBarracks){ctx.shadowColor='#ffd46b';ctx.shadowBlur=12;ctx.fillStyle='#6b492e';ctx.fillRect(-25,-18,50,42);ctx.fillStyle='#b98b4f';ctx.fillRect(-30,-22,60,10);ctx.fillStyle='#7f3d32';ctx.beginPath();ctx.moveTo(-31,-22);ctx.lineTo(0,-43);ctx.lineTo(31,-22);ctx.closePath();ctx.fill();ctx.fillStyle='#f3d18a';ctx.fillRect(-7,1,14,23);ctx.fillStyle='#6ed1e8';ctx.fillRect(-20,-13,10,12);ctx.fillRect(10,-13,10,12);ctx.font='22px sans-serif';ctx.textAlign='center';ctx.fillText('⚔️',0,-25);if(t===selectedTower){ctx.strokeStyle='#fff08a';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,34,0,Math.PI*2);ctx.stroke();}ctx.restore();return;}ctx.shadowColor=t.color;ctx.shadowBlur=9;ctx.fillStyle=t.color+'22';ctx.beginPath();ctx.arc(0,0,24+Math.sin(clock*3+t.x)*2,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;if(t===selectedTower){ctx.strokeStyle='#fff08a';ctx.lineWidth=3;ctx.beginPath();ctx.arc(0,0,t.range,0,Math.PI*2);ctx.stroke();ctx.strokeStyle='#fff08a88';ctx.lineWidth=2;ctx.beginPath();ctx.arc(0,0,29+Math.sin(clock*5)*2,0,Math.PI*2);ctx.stroke();}
+ ctx.fillStyle='#4d5b5a';ctx.beginPath();ctx.ellipse(0,8,25,18,0,0,7);ctx.fill();ctx.fillStyle='#687b7a';ctx.beginPath();ctx.ellipse(0,3,22,16,0,0,7);ctx.fill();
+ const kick=t.recoil?Math.max(0,t.recoil)*7:0;
+ ctx.fillStyle=t.color;ctx.fillRect(-13,-17+kick,26,27);ctx.fillStyle='#3c4548';ctx.fillRect(-8,-26+kick,16,17);
+ // Little rotating aiming cap
+ ctx.save();ctx.rotate(t.aimAngle||0);ctx.fillStyle='#3c4548';ctx.fillRect(-5,-29-kick,10,19);ctx.fillStyle=t.color;ctx.fillRect(-3,-34-kick,6,10);ctx.restore();
+ ctx.font='24px sans-serif';ctx.textAlign='center';ctx.fillText(t.emoji,0,-17);
+ ctx.fillStyle='#172d2c';ctx.fillRect(-17,22,34,5);ctx.fillStyle='#ffd34d';ctx.fillRect(-17,22,34*t.level/4,5);ctx.restore();}
+function drawEnemy(e){let p=pathPoint(e.progress),bob=Math.sin(clock*8+e.progress*.04)*2;p.y+=bob;ctx.fillStyle='#213d2c66';ctx.beginPath();ctx.ellipse(p.x,p.y+8,14,6,0,0,Math.PI*2);ctx.fill();ctx.fillStyle=e.color;ctx.beginPath();ctx.arc(p.x,p.y,12,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ffffff22';ctx.beginPath();ctx.arc(p.x-3,p.y-4,5,0,Math.PI*2);ctx.fill();ctx.fillStyle='#f2f3da';ctx.beginPath();ctx.arc(p.x-4,p.y-2,3,0,7);ctx.arc(p.x+4,p.y-2,3,0,7);ctx.fill();ctx.fillStyle='#293b2d';ctx.beginPath();ctx.arc(p.x-4,p.y-2,1.5,0,7);ctx.arc(p.x+4,p.y-2,1.5,0,7);ctx.fill();if(!e.boss){ctx.fillStyle='#4b2725';ctx.fillRect(p.x-14,p.y-21,28,4);ctx.fillStyle='#ff6458';ctx.fillRect(p.x-14,p.y-21,28*Math.max(0,e.hp/e.maxHp),4);}else{ctx.fillStyle='#381b22';ctx.fillRect(p.x-27,p.y-43,54,6);ctx.fillStyle='#ff5363';ctx.fillRect(p.x-27,p.y-43,54*Math.max(0,e.hp/e.maxHp),6);ctx.font='bold 12px system-ui';ctx.textAlign='center';ctx.fillStyle='#fff';ctx.fillText('БОС',p.x,p.y-49);}}
+function burst(x,y,color,count=10){for(let i=0;i<count;i++){let a=Math.random()*Math.PI*2,v=35+Math.random()*125;particles.push({x,y,vx:Math.cos(a)*v,vy:Math.sin(a)*v,life:.35+Math.random()*.55,max:.9,color,size:2+Math.random()*3});}}
+function draw(){clock+=.016;drawBackground();
+ // Soft vignette makes the playfield feel deeper.
+ const vg=ctx.createRadialGradient(W/2,H/2,100,W/2,H/2,620);vg.addColorStop(0,'#ffffff00');vg.addColorStop(1,'#071a1b38');ctx.fillStyle=vg;ctx.fillRect(0,0,W,H);
+ // Ambient fireflies
+ for(let i=0;i<18;i++){let x=(i*173+Math.sin(clock*1.2+i)*15+W)%W,y=(i*97+Math.cos(clock+i)*10+H)%H;ctx.globalAlpha=.25+.3*(Math.sin(clock*2+i)+1)/2;ctx.fillStyle='#f5f6a6';ctx.beginPath();ctx.arc(x,y,1.7,0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;
+ towers.forEach(drawTower);enemies.forEach(drawEnemy);
+ for(const k of knights){const p=pathPoint(k.progress);ctx.save();ctx.translate(p.x,p.y);ctx.fillStyle='#24323a88';ctx.beginPath();ctx.ellipse(0,9,15,6,0,0,Math.PI*2);ctx.fill();ctx.fillStyle=k.hitFlash>0?'#ff6868':'#477eaa';ctx.fillRect(-9,-9,18,18);ctx.fillStyle='#c9d5dc';ctx.beginPath();ctx.arc(0,-15,9,0,Math.PI*2);ctx.fill();ctx.fillStyle='#f0d47c';ctx.fillRect(-12,-20,24,5);ctx.strokeStyle='#e8edf0';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(8,-6);ctx.lineTo(18,-17);ctx.stroke();ctx.fillStyle='#172c3b';ctx.fillRect(-15,-30,30,4);ctx.fillStyle='#63e18a';ctx.fillRect(-15,-30,30*Math.max(0,k.hp/k.maxHp),4);if(k.attackFlash>0){ctx.strokeStyle='#fff2a3';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(10,-9);ctx.lineTo(25,-24);ctx.stroke();}ctx.restore();}
+ for(const s of shots){
+   const f=Math.min(1,s.progress),x=s.x+(s.tx-s.x)*f,y=s.y+(s.ty-s.y)*f-(s.type==='cannon'?Math.sin(f*Math.PI)*45:0);
+   ctx.save();ctx.shadowColor=s.color;ctx.shadowBlur=s.type==='mage'?18:9;
+   // A short fading trail, not a beam.
+   for(let k=3;k>=1;k--){let ff=Math.max(0,f-k*.045),tx=s.x+(s.tx-s.x)*ff,ty=s.y+(s.ty-s.y)*ff-(s.type==='cannon'?Math.sin(ff*Math.PI)*45:0);ctx.globalAlpha=.12+(4-k)*.08;ctx.fillStyle=s.color;ctx.beginPath();ctx.arc(tx,ty,(s.type==='cannon'?5:3)*(1-k*.12),0,Math.PI*2);ctx.fill();}
+   ctx.globalAlpha=1;
+   if(s.type==='archer'){
+     ctx.translate(x,y);ctx.rotate(Math.atan2(s.ty-s.y,s.tx-s.x));ctx.strokeStyle='#f5deb0';ctx.lineWidth=2.5;ctx.beginPath();ctx.moveTo(-9,0);ctx.lineTo(7,0);ctx.stroke();ctx.fillStyle='#fff1c7';ctx.beginPath();ctx.moveTo(10,0);ctx.lineTo(3,-4);ctx.lineTo(3,4);ctx.closePath();ctx.fill();
+   }else if(s.type==='cannon'){
+     ctx.fillStyle='#242f36';ctx.beginPath();ctx.arc(x,y,7,0,Math.PI*2);ctx.fill();ctx.fillStyle='#ffbd61';ctx.beginPath();ctx.arc(x-2,y-2,3,0,Math.PI*2);ctx.fill();
+   }else{
+     ctx.translate(x,y);ctx.rotate(clock*5);ctx.fillStyle='#aabaff';ctx.beginPath();ctx.moveTo(0,-8);ctx.lineTo(6,0);ctx.lineTo(0,8);ctx.lineTo(-6,0);ctx.closePath();ctx.fill();ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(0,0,2.5,0,Math.PI*2);ctx.fill();
+   }
+   ctx.restore();
+ }
+ for(let i=particles.length-1;i>=0;i--){let p=particles[i];p.life-=.016;p.x+=p.vx*.016;p.y+=p.vy*.016;p.vx*=.97;p.vy*=.97;if(p.life<=0){particles.splice(i,1);continue;}ctx.globalAlpha=Math.max(0,p.life/p.max);ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.size*Math.max(.25,p.life/p.max),0,Math.PI*2);ctx.fill();}ctx.globalAlpha=1;
+ if(!active&&!gameOver){ctx.fillStyle='#10251ecc';ctx.fillRect(260,18,440,45);ctx.fillStyle='white';ctx.textAlign='center';ctx.font='bold 20px system-ui';ctx.fillText(wave===0?'Підготуй оборону!':'Хвиля завершена — готовий?',480,47);}
+ if(gameOver){ctx.fillStyle='#08151ddd';ctx.fillRect(220,180,520,150);ctx.fillStyle='#fff';ctx.textAlign='center';ctx.font='bold 34px system-ui';ctx.fillText(lives>0?'🏆 Перемога!':'💥 Гру завершено',480,235);ctx.font='20px system-ui';ctx.fillText('Натисни «Почати знову», щоб зіграти ще раз.',480,277);}
+}
+function spawnEnemy(){
+ if(wave===5&&!bossUnlocked){
+   bossUnlocked=true;
+   const hp=1400;
+   enemies.push({progress:0,hp,maxHp:hp,speed:25,color:'#a52f4a',reward:120,boss:true,name:'Король гоблінів',size:25});
+   ui('⚠️ З’явився бос — Король гоблінів! Переможи його, щоб отримати 120 монет і відкрити нового героя.');
+   return;
+ }
+ let hp=45+wave*19;
+ enemies.push({progress:0,hp,maxHp:hp,speed:48+wave*2.4,color:wave%4===0?'#6e6f82':wave%3===0?'#b9a34b':'#4e9c45',reward:8+Math.floor(wave/2),boss:false});
+}
+function startWave(){if(gameOver){reset();return;}if(active){ui('Хвиля вже триває!');return;}if(wave>=10){gameOver=true;ui('Ти переміг!');return;}wave++;active=true;spawnLeft=7+wave*2;spawnTimer=.2;ui('Хвиля '+wave+' почалася! Вороги йдуть дорогою.');}
+function update(dt){if(paused||gameOver)return;
+ if(active){spawnTimer-=dt;if(spawnLeft>0&&spawnTimer<=0){spawnEnemy();spawnLeft--;spawnTimer=Math.max(.38,1.05-wave*.045);}if(spawnLeft===0&&enemies.length===0){active=false;if(wave===10){gameOver=true;ui('Перемога! Усі 10 хвиль відбито!');}else{coins+=25;ui('Хвилю відбито! Бонус +25 монет. Підготуйся до наступної.');}}}
+ for(let i=enemies.length-1;i>=0;i--){let e=enemies[i];e.attackCd=(e.attackCd||0)-dt;e.attackFlash=Math.max(0,(e.attackFlash||0)-dt);const ep=pathPoint(e.progress);let blockingKnight=null,knightDist=Infinity;for(const k of knights){const kp=pathPoint(k.progress),dist=Math.hypot(ep.x-kp.x,ep.y-kp.y);if(dist<34&&dist<knightDist){blockingKnight=k;knightDist=dist;}}if(blockingKnight){const alreadyFighting=enemies.some(other=>other!==e&&Math.hypot(pathPoint(other.progress).x-pathPoint(blockingKnight.progress).x,pathPoint(other.progress).y-pathPoint(blockingKnight.progress).y)<34);if(alreadyFighting)blockingKnight=null;}if(blockingKnight){if(e.attackCd<=0){blockingKnight.hp-=e.boss?24:12;e.attackCd=e.boss?.75:1.0;blockingKnight.hitFlash=.18;burst(ep.x,ep.y,'#ff7777',5);}}else{e.progress+=e.speed*dt;}if(e.progress>=totalPath){enemies.splice(i,1);lives--;if(lives<=0){lives=0;gameOver=true;active=false;ui('База впала. Спробуй іншу тактику!');}else ui('Ворог прорвався! Залишилося життів: '+lives);}}
+ // Barracks periodically send a fresh knight out from the base at the start of the road.
+ if(barracksUnlocked&&towers.some(t=>t.isBarracks)){knightSpawnTimer-=dt;if(knightSpawnTimer<=0){const barracks=towers.filter(t=>t.isBarracks);if(barracks.length){const level=Math.max(...barracks.map(t=>t.level));knights.push({progress:totalPath-45,hp:160+(level-1)*35,maxHp:160+(level-1)*35,speed:48+level*2,damage:28+(level-1)*9,attackCd:0,attackFlash:0});knightSpawnTimer=8;const baseP=pathPoint(totalPath-45);burst(baseP.x,baseP.y,'#d8e7ff',8);ui('🛡️ Лицар вийшов із бази! Один ворог б’ється з ним, інші проходять далі.');}}}
+ for(let i=knights.length-1;i>=0;i--){const k=knights[i];k.attackCd-=dt;k.attackFlash=Math.max(0,(k.attackFlash||0)-dt);k.hitFlash=Math.max(0,(k.hitFlash||0)-dt);const kp=pathPoint(k.progress);let target=null,near=Infinity;for(const e of enemies){const ep=pathPoint(e.progress),dist=Math.hypot(ep.x-kp.x,ep.y-kp.y);if(dist<35&&dist<near){target=e;near=dist;}}if(target){if(k.attackCd<=0){target.hp-=k.damage;k.attackCd=.72;k.attackFlash=.18;const ep=pathPoint(target.progress);burst(ep.x,ep.y,'#fff0a0',7);if(target.hp<=0){burst(ep.x,ep.y,target.color,16);coins+=target.reward;if(target.boss&&!bossRewardClaimed){bossRewardClaimed=true;barracksUnlocked=true;ui('🏆 Боса переможено! +120 монет. Відкрито казарму — тепер можна наймати лицарів!');burst(ep.x,ep.y,'#ffd34d',42);}enemies.splice(enemies.indexOf(target),1);}}}else{k.progress-=k.speed*dt;if(k.progress<25)k.progress=totalPath-45;}if(k.hp<=0){knights.splice(i,1);}}
+ for(const t of towers){if(t.isBarracks)continue;t.cool-=dt;t.recoil=Math.max(0,(t.recoil||0)-dt*4);if(t.cool<=0){let target=null,best=-1;for(const e of enemies){let p=pathPoint(e.progress),dist=Math.hypot(p.x-t.x,p.y-t.y);if(dist<=t.range&&e.progress>best){target=e;best=e.progress;}}if(target){let p=pathPoint(target.progress);t.aimAngle=Math.atan2(p.y-t.y,p.x-t.x);t.recoil=1;burst(t.x,t.y,t.type==='mage'?'#9bafff':t.type==='cannon'?'#ffb15c':'#fff0a2',t.type==='cannon'?7:4);shots.push({x:t.x,y:t.y-15,tx:p.x,ty:p.y,target,damage:t.damage*(1+(t.level-1)*.65),color:t.type==='mage'?'#9bafff':t.type==='cannon'?'#ffb15c':'#fff0a2',type:t.type,progress:0,speed:t.type==='cannon'?440:t.type==='mage'?560:650});t.cool=t.rate;}}}
+ for(let i=shots.length-1;i>=0;i--){let s=shots[i];let distance=Math.hypot(s.tx-s.x,s.ty-s.y);s.progress=Math.min(1,s.progress+dt*s.speed/Math.max(1,distance));if(s.progress>=1){if(enemies.includes(s.target)){let ep=pathPoint(s.target.progress);burst(ep.x,ep.y,s.color,s.target.hp<=s.damage?12:5);s.target.hp-=s.damage;if(s.target.hp<=0){let ep=pathPoint(s.target.progress);burst(ep.x,ep.y,s.target.color,18);coins+=s.target.reward;if(s.target.boss&&!bossRewardClaimed){bossRewardClaimed=true;barracksUnlocked=true;ui('🏆 Боса переможено! +120 монет. Відкрито казарму — тепер можна наймати лицарів!');burst(ep.x,ep.y,'#ffd34d',42);}enemies.splice(enemies.indexOf(s.target),1);}}else{burst(s.tx,s.ty,s.color,5);}shots.splice(i,1);}}
+ ui(); }
+function reset(){coins=180;lives=20;wave=0;selectedType=null;selectedTower=null;enemies=[];towers=[];shots=[];knights=[];knightSpawnTimer=0;active=false;paused=false;gameOver=false;bossUnlocked=false;bossRewardClaimed=false;barracksUnlocked=false;document.getElementById('bossHud').classList.remove('visible');document.getElementById('pause').textContent='⏸ Пауза';document.getElementById('startWave').innerHTML='<div>⚔️</div><div class="tower-name">Почати хвилю</div><div class="price">▶</div>';ui('Нова гра! Обери башту й постав її на траву. Казарма відкриється після перемоги над босом на 5-й хвилі.');}
+function coords(ev){const r=canvas.getBoundingClientRect();return{x:(ev.clientX-r.left)*W/r.width,y:(ev.clientY-r.top)*H/r.height};}
+canvas.addEventListener('pointerdown',ev=>{const {x,y}=coords(ev);let hit=[...towers].reverse().find(t=>Math.hypot(t.x-x,t.y-y)<28);if(hit){selectedTower=hit;selectedType=null;ui(hit.name+' • рівень '+hit.level+'. Можна покращити або продати.');return;}if(selectedType){placeTower(x,y);return;}selectedTower=null;ui('Спочатку обери башту внизу, потім торкнися трави.');});
+buttons.forEach(b=>b.addEventListener('click',()=>{selectedType=b.dataset.tower;selectedTower=null;ui('Обрано: '+defs[selectedType].name+'. Торкнися вільної трави, щоб поставити башту.');}));
+document.getElementById('startWave').addEventListener('click',startWave);
+document.getElementById('upgrade').addEventListener('click',()=>{if(selectedTower){const cost=upgradeCost(selectedTower);if(coins>=cost){coins-=cost;selectedTower.level++;selectedTower.damage*=1.25;if(!selectedTower.isBarracks)selectedTower.range+=10;selectedTower.rate*=.9;ui(selectedTower.name+' покращено до рівня '+selectedTower.level+'! '+(selectedTower.isBarracks?'Лицарі стануть сильнішими. ':'')+'Наступне покращення коштуватиме '+upgradeCost(selectedTower)+' монет.');}}});
+document.getElementById('sell').addEventListener('click',()=>{if(selectedTower){coins+=Math.floor(selectedTower.cost*.6);towers=towers.filter(t=>t!==selectedTower);selectedTower=null;ui('Башту продано. Монети повернено.');}});
+document.getElementById('pause').addEventListener('click',()=>{paused=!paused;document.getElementById('pause').textContent=paused?'▶ Продовжити':'⏸ Пауза';ui(paused?'Гру призупинено.':'Гру продовжено.');});
+let raf=0;function loop(ts){let dt=Math.min(.04,(ts-last)/1000||0);last=ts;update(dt);draw();requestAnimationFrame(loop);}ui('Обери башту, потім торкнися вільного місця біля дороги. Казарма відкриється після боса на 5-й хвилі.');requestAnimationFrame(loop);
+})();
+</script>
+</body></html>
